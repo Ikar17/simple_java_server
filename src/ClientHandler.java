@@ -43,18 +43,9 @@ public class ClientHandler implements Runnable {
             System.out.println("Client thread stop working\n");
         }catch (ClassNotFoundException e) {
             e.printStackTrace();
-        }finally {
+        }finally{
             server.removeClient(this);
         }
-    }
-
-    @Override
-    public boolean equals(Object object){
-        if(object == this) return true;
-        if (!(object instanceof ClientHandler)) return false;
-
-        ClientHandler clientHandler = (ClientHandler) object;
-        return clientHandler.clientId == this.clientId;
     }
 
     public void sendDataToClient(Object object) throws IOException {
@@ -63,9 +54,20 @@ public class ClientHandler implements Runnable {
         this.outputStream.flush();
     }
 
-    public void closeConnect() throws IOException{
-        outputStream.close();
-        inputStream.close();
-        socket.close();
+    public boolean closeConnect(){
+        try{
+            outputStream.close();
+            inputStream.close();
+            socket.close();
+            return true;
+        }catch(IOException e){
+            System.out.printf("Problems with closing socket\n");
+            return false;
+        }
+
+    }
+
+    public int getClientId() {
+        return clientId;
     }
 }

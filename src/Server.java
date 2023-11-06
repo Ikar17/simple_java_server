@@ -23,9 +23,10 @@ public class Server{
             Server server = new Server(port);
 
             System.out.println("Klawisz 'q' konczy dzialanie serwera\n");
+            char keyQuit = 'q';
             while(true){
                 char key = (char)System.in.read();
-                if(key == 'q' || key == 'Q') break;
+                if(key == keyQuit) break;
             }
 
             server.closeServer();
@@ -37,16 +38,17 @@ public class Server{
     }
 
     public Server(int port) throws IOException {
-        createVisits(LocalTime.of(10,0));
+        int startHour = 10;
+        int startMinute = 0;
+        createVisits(LocalTime.of(startHour,startMinute));
 
         this.visitsLock = new ReentrantLock();
         this.clientHandlers = new LinkedBlockingQueue<>();
         this.freeClientId = 0;
+
         this.serverSocket = new ServerSocket(port);
 
-        this.acceptClientsThread = new Thread(() ->{
-            acceptNewClients();
-        });
+        this.acceptClientsThread = new Thread(this::acceptNewClients);
         this.acceptClientsThread.start();
     }
     private void acceptNewClients(){
@@ -77,13 +79,9 @@ public class Server{
             System.out.println("Accept clients thread stop working\n");
         }
     }
-    public void removeClient(ClientHandler clientHandler){
-        try {
-            clientHandler.closeConnect();
-            clientHandlers.remove(clientHandler);
-        }catch(Exception e){
-            e.printStackTrace();
-        }
+    public boolean removeClient(ClientHandler clientHandler){
+        clientHandler.closeConnect();
+        return clientHandlers.remove(clientHandler);
     }
     public void closeServer() throws IOException, InterruptedException{
         for(ClientHandler clientHandler : this.clientHandlers){
@@ -92,37 +90,46 @@ public class Server{
         this.serverSocket.close();
         this.acceptClientsThread.join();
     }
-    private void createVisits(LocalTime startTime){
+    private boolean createVisits(LocalTime startTime){
         this.visits = new ArrayList<>();
         int numberOfVisits = 8;
+        int visitDurationInHour = 1;
         for(int id = 0; id < numberOfVisits; ++id){
-            LocalTime endTime = startTime.plusHours(1);
+            LocalTime endTime = startTime.plusHours(visitDurationInHour);
             Visit visit = new Visit(id,startTime,endTime);
             visits.add(visit);
             startTime = endTime;
         }
+        return true;
     }
 
-    public void reserveVisit(int visitId, int clientId){
+    public boolean reserveVisit(int visitId, int clientId){
         this.visitsLock.lock();
         Visit visit = this.visits.get(visitId);
         if(!visit.isReserved()){
             System.out.printf("Client o id: %d rezerwuje wizytę nr: %d\n", clientId, visitId);
             visit.setReserved(true);
             visit.setClientId(clientId);
+            this.visitsLock.unlock();
+            return true;
         }
         this.visitsLock.unlock();
+        return false;
     }
 
-    public void cancelVisit(int visitId, int clientId){
+    public boolean cancelVisit(int visitId, int clientId){
         this.visitsLock.lock();
         Visit visit = this.visits.get(visitId);
         if(visit.isReserved()){
             System.out.printf("Client o id: %d odwoluje wizytę nr: %d\n", clientId, visitId);
             visit.setReserved(false);
             visit.setClientId(-1);
+            this.visitsLock.unlock();
+            return true;
+
         }
         this.visitsLock.unlock();
+        return false;
     }
     public void sendUpdatedVisitToAll(int visitId){
         this.visitsLock.lock();
@@ -132,7 +139,7 @@ public class Server{
             try{
                 clientHandler.sendDataToClient(visit);
             }catch (IOException e) {
-                e.printStackTrace();
+                System.out.printf("Client with id: %d is being deleted\n", clientHandler.getClientId());
                 removeClient(clientHandler);
             }
         }
